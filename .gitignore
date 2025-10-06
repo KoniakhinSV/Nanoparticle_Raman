@@ -1,0 +1,71 @@
+# .gitignore for Python project with conda environment
+
+# Conda environment
+.env/
+.conda/
+env/
+venv/
+ENV/
+
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Custom files (add your specific files here)
+model_weights_here.npz
+raman_dataset_X.npy
+raman_dataset_Y.npy
+raman_net_best_X2.pth
+
+# Custom directories (add your specific directories here)
+_misc/
