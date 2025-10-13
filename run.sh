@@ -2,10 +2,30 @@
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-# Path to the app (relative to the script directory)
-#APP_PATH="$SCRIPT_DIR/raman_calculate.py"
-#APP_PATH="$SCRIPT_DIR/raman_fit_NN.py"
-APP_PATH="$SCRIPT_DIR/raman_fit_Metropolis.py"
+# Default app path
+APP_PATH="$SCRIPT_DIR/raman_calculate.py"
+
+# Parse command line options
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -c)
+            APP_PATH="$SCRIPT_DIR/raman_calculate.py"
+            shift
+            ;;
+        -N)
+            APP_PATH="$SCRIPT_DIR/raman_fit_NN.py"
+            shift
+            ;;
+        -M)
+            APP_PATH="$SCRIPT_DIR/raman_fit_Metropolis.py"
+            shift
+            ;;
+        *)
+            # Preserve other arguments
+            break
+            ;;
+    esac
+done
 
 # Function to find Python interpreter in subdirectories
 find_python_interpreter() {
@@ -45,6 +65,7 @@ PYTHON_PATH=$(find_python_interpreter "$SCRIPT_DIR")
 
 if [[ -n "$PYTHON_PATH" ]]; then
     echo "Found Python interpreter: $PYTHON_PATH"
+    echo "Running: $APP_PATH"
     "$PYTHON_PATH" "$APP_PATH" "$@"
 else
     echo "Error: No Python interpreter found in subdirectories of $SCRIPT_DIR"
@@ -52,8 +73,10 @@ else
 
     # Fallback to system Python
     if command -v python3 &> /dev/null; then
+        echo "Running: $APP_PATH"
         python3 "$APP_PATH" "$@"
     elif command -v python &> /dev/null; then
+        echo "Running: $APP_PATH"
         python "$APP_PATH" "$@"
     else
         echo "Error: No Python interpreter found anywhere!"

@@ -67,5 +67,9 @@ raman_dataset_X.npy
 raman_dataset_Y.npy
 raman_net_best_X2.pth
 
+result_Raman_Calculated.zip
+result_Raman_Fit_Metropolis.zip
+result_Raman_Fit_NN.zip
+
 # Custom directories (add your specific directories here)
 _misc/

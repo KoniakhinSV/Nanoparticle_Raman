@@ -1,2 +1,2 @@
-D,dD,Cimp,Gamma0
-4.0,0.1,0.7,14.5
+background,D,dD,Cimp,Gamma0,adjust_Cimp,adjust_Gamma0
+1.0, 4.0, 0.3, 1.0, 14.5, 1.0, 1.0

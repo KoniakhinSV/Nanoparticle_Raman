@@ -1,5 +1,6 @@
 import raman_routines
 import os
+from csv_param import validate_parameters
 
 # --- initialize ---
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -9,8 +10,28 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 original_path = os.path.join(BASE_DIR, "input.csv")
 zip_path = os.path.join(BASE_DIR, "result_Raman_Fit_NN.zip")
 
+
+
+#----------------------------------------------------------------------------------
+params, error = validate_parameters('parameters.csv')
+if error:
+    SUBTRACT_BACKGROUND = False
+    print(f"Parameters validation error: {error}")
+else:
+    print(f"Read initial parameters are: {params}")
+    params1 = [params["D"],params["dD"],params["Cimp"],params["Gamma0"],params["adjust_Cimp"],params["adjust_Gamma0"]]
+
+    if params["background"] == 1.0:
+        SUBTRACT_BACKGROUND = True
+    else:
+        SUBTRACT_BACKGROUND = False
+
+
+
 #process
-is_valid, message, known_spectrum = raman_routines.check_csv_format(original_path, CONST=CONST)
+is_valid, message, known_spectrum = raman_routines.check_csv_format(original_path, CONST=CONST, SUBTRACT_BACKGROUND = SUBTRACT_BACKGROUND)
+print(SUBTRACT_BACKGROUND)
+print(known_spectrum.shape)
 if not is_valid:
     print(f"Invalid CSV: {message}")
 else:

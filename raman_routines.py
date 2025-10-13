@@ -1,21 +1,22 @@
 import numpy as np
 import matplotlib
-matplotlib.use("Agg") # uncomment for standalone
+matplotlib.use("Agg")    # uncomment for standalone
 import matplotlib.pyplot as plt
 
 import os
 import zipfile
 import copy
+import csv
 
 #===================================================================
 
-def find_load_npz_file_alt():
+def find_load_npz_file_alt(endswith_argument = '_load.npz'):
 
     #cwd = os.getcwd()
     cwd = os.path.dirname(os.path.abspath(__file__))
     
     for filename in os.listdir(cwd):
-        if filename.endswith('_load.npz'):
+        if filename.endswith(endswith_argument):
             return filename
 
 
@@ -149,9 +150,9 @@ def mean_squared_deviation(spectrum1, spectrum2):
 def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
 
 
-    # --- Step 2: Initialize current distribution randomly / take initial params ---
-    if PARAMS and isinstance(PARAMS, (list, tuple)) and len(PARAMS) == 4:
-        mu0, sigma0, C_IMP, GAMMA0 = PARAMS
+    # --- Step 1: Initialize current distribution from natural ND parameters / take initial params ---
+    if PARAMS and isinstance(PARAMS, (list, tuple)) and len(PARAMS) == 6:
+        mu0, sigma0, C_IMP, GAMMA0, Adjust_C_IMP, Adjust_GAMMA0 = PARAMS
     else:
         C_IMP = 0.7
         GAMMA0 = 15.0
@@ -159,14 +160,15 @@ def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
         #sigma0 = np.random.uniform(0.2, 0.6)
         mu0 = 5
         sigma0 = 0.3
-
+        Adjust_C_IMP = 1.0
+        Adjust_GAMMA0 = 1.0
 
     _, current_counts = generate_lognormal_counts(mu_nm=mu0, sigma_nm=sigma0, N_total=1000, CONST = CONST)
     current_counts /= np.max(current_counts)
     current_spectrum = total_raman_spectrum(current_counts, C_IMP, GAMMA0, CONST=CONST)
     current_msd = mean_squared_deviation(current_spectrum, known_spectrum[:,1])
 
-    # --- Step 3: Iterative Metropolis-like refinement ---
+    # --- Step 2: Iterative Metropolis-like refinement ---
 
     history_msd = [current_msd]
     history_counts = [current_counts.copy()]
@@ -175,8 +177,6 @@ def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
     for step in range(MAX_ITER):
         # Generate small correction
         mu_c = np.random.uniform(2.0, 7.0)
-        #sigma_c = np.random.uniform(0.05 , 0.6)
-        #sigma_c = 0.08 * (2.0**np.random.uniform(0.0 , 3.6))
         sigma_c = np.random.uniform(0.05, 0.3*6/mu_c)
         _, correction = generate_lognormal_counts(mu_c, sigma_c, N_total=1000, CONST=CONST)
         correction /= np.max(correction)
@@ -188,9 +188,9 @@ def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
                                 a_min = 0.0, a_max = 40.0);
         trial_counts /= np.max(trial_counts)  # keep normalized
         
-        C_IMP_trial = np.clip(C_IMP + np.random.uniform(-0.01,0.01),
+        C_IMP_trial = np.clip(C_IMP + Adjust_C_IMP * np.random.uniform(-0.01,0.01),
                                 a_min = 0.0, a_max = 3.0);
-        GAMMA0_trial = np.clip(GAMMA0 + np.random.uniform(-0.05,0.05),
+        GAMMA0_trial = np.clip(GAMMA0 + Adjust_GAMMA0* np.random.uniform(-0.05,0.05),
                                 a_min = 0.5, a_max = 40.0);
 
         trial_spectrum = total_raman_spectrum(trial_counts, C_IMP_trial, GAMMA0_trial,
@@ -282,8 +282,12 @@ def create_output_zip(original_csv_path, zip_path, result_main, mode = "NN", CON
 
     # Plot spectrum match
     plt.figure(figsize=(10, 6))
-    plt.plot(known_spectrum[:,0], known_spectrum[:,1], label='Known spectrum', linewidth=2, color = 'black')
+    plt.plot(known_spectrum[:,0], known_spectrum[:,1], label='Treated spectrum', linewidth=2, color = 'black')
     plt.plot(known_spectrum[:,0], reconstructed_spectrum[:,1], label='Reconstructed spectrum', linestyle='--',color = 'blue')
+
+    if known_spectrum.shape[1] == 3:
+        plt.plot(known_spectrum[:,0], known_spectrum[:,2], label='With background', color='green', linestyle='dotted')
+
     plt.xlabel('ω (cm⁻¹)')
     plt.ylabel('I(ω)')
     plt.title(mode + ': Spectrum reconstruction')
@@ -560,10 +564,28 @@ def generate_sample_train(CONST, n_distributions=1, noiselevel = 0.01, proportio
 
 #=====================================================================
 
+def subtract_background(known_spectrum_arg, filename_BACK):
+    known_spectrum = known_spectrum_arg.copy()
+    numpy_model_BACK = load_numpy_model(filename =  filename_BACK , activation='tanh')
+    known_spectrum_BACK = numpy_model_BACK(known_spectrum[:,1])
+    known_spectrum[:,1] = known_spectrum_BACK[:]
+    sigma = 2 * 0.67
+    radius = int(3 * sigma)
+    x = np.arange(-radius, radius + 1)
+    kernel = np.exp(-0.5 * (x / sigma) ** 2)
+    kernel = kernel / kernel.sum()
+    pad_width = radius
+    padded_data = np.pad(known_spectrum[:,1], pad_width, mode='edge')
+    known_spectrum[:,1] = np.convolve(padded_data, kernel, mode='valid')
+    #known_spectrum[:,1] = np.convolve(known_spectrum[:,1], kernel, mode='same')
+    known_spectrum[:,1] = known_spectrum[:,1] / np.max(known_spectrum[:,1])
+    return np.column_stack((known_spectrum[:,0], known_spectrum[:,1],known_spectrum_arg[:,1]))
 
-import csv
+#=====================================================================
 
-def check_csv_format(filename, CONST = CONST):
+
+
+def check_csv_format(filename, CONST = CONST, SUBTRACT_BACKGROUND = False):
     try:
         data = np.loadtxt(filename, delimiter=",")
     except Exception as e:
@@ -625,6 +647,15 @@ def check_csv_format(filename, CONST = CONST):
         interp_Y[i] = (1 - t) * y0 + t * y1
     interp_Y = interp_Y / np.max(interp_Y)
     interpolated_data = np.column_stack((interp_X, interp_Y))
+
+
+    if SUBTRACT_BACKGROUND:
+        filename_BACK = find_load_npz_file_alt(endswith_argument = "loadB.npz")
+        if filename_BACK != None:
+            interpolated_data = subtract_background(interpolated_data,filename_BACK)
+
+
+
     return True, "Success", interpolated_data
 
 
