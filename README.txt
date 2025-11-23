@@ -2,79 +2,71 @@
 Raman Spectra Analysis and Simulation Tool for Nanodiamonds
 ============================================================
 
-
-
 ------------------------------------------------------------------
 General Overview
 ------------------------------------------------------------------
 
-This software provides Python-based tools for processing experimental Raman spectra of diamond nanoparticles and calculating theoretical spectra from user-defined nanodiamond powder parameters.
+This toolkit provides Python-based methods for:
 
-It combines physical modeling approaches with practical fitting spectra with reconstruction of nanodiamond size histogram
-   - raman_fit_NN.py
-   - raman_fit_Metropolis.py
-and simulation capabilities
-   - raman_calculate.py
+- Fitting experimental Raman spectra of nanodiamonds
+- Simulating Raman spectra from user-defined nanodiamond parameters
 
+Two fitting approaches are available:
+   • raman_fit_NN.py — neural-network-based
+   • raman_fit_Metropolis.py — Metropolis optimization
 
-The software is available as:
+Simulation is performed by:
+   • raman_calculate.py
 
-1. Standalone run repository with Python scripts    https://github.com/KoniakhinSV/Nanoparticle_Raman
-
-2. Online tool   https://nanoraman.pythonanywhere.com
-
+Available both as a script repository and an online tool:
+1. https://github.com/KoniakhinSV/Nanoparticle_Raman
+2. https://nanoraman.pythonanywhere.com
 
 
 ------------------------------------------------------------------
 Physical Models Behind the Algorithms
 ------------------------------------------------------------------
 
-The tool implements recent theoretical developments in Raman spectroscopy of nanodiamonds, particularly:
+The implementation follows modern theories of Raman scattering in nanodiamonds:
 
-1. Discrete size-quantized phonon modes in finite-size crystallites (arXiv:1803.01653v2, https://doi.org/10.1021/acs.jpcc.8b05415)
-   Due to finite crystallite size, standing wave like phonons (non-zero effetive wavevectors) contribute to Raman scattering.
-   This results in a downshift and asymmetric broadening of the diamond peak compared to bulk diamond due to negative mass dispersion.
+1. **Finite-size phonon confinement**
+   Discrete quantized phonon modes cause peak downshift and asymmetric broadening
+   (arXiv:1803.01653v2; https://doi.org/10.1021/acs.jpcc.8b05415)
 
-2. Continuous approach: "elasticity theory" for optical phonons (arXiv:1806.08100v1, https://doi.org/10.1021/acs.jpcc.8b07061)
-   Discrete (atomistic) dynamical matrix method can be mapped to continuous Klein-Fock-Gordon equation with Euclidean metric (scalar "elasticity theory" for optical phonons). Raman cross section within bond polarization model can be mapped to the square of the phonon wave-function integral over nanoparticle volume (form-factor).
+2. **Continuum “elasticity-like” optical phonon model**
+   Atomistic dynamics mapped to a Klein–Fock–Gordon–type equation
+   (arXiv:1806.08100v1; https://doi.org/10.1021/acs.jpcc.8b07061)
 
-3. Lattice Disorder Effects (arXiv:2403.17310, https://doi.org/10.1016/j.diamond.2024.111182)
-   Point defects and impurities, such as vacancies or substitutional atoms, cause additional shifts
-   and broadening of the Raman line. For nanodiamonds, these contributions are of the same order
-   of magnitude as size-confinement effects.
+3. **Lattice disorder and impurities**
+   Vacancies/substitutional atoms introduce size-independent shifts and broadening
+   (arXiv:2403.17310; https://doi.org/10.1016/j.diamond.2024.111182)
 
-Accurate spectral analysis requires considering *both* finite-size confinement and impurity-related contributions.
-
+Accurate reconstruction requires both confinement and impurity effects.
 
 
 ------------------------------------------------------------------
 Features
 ------------------------------------------------------------------
 
-1. Experimental Raman Spectrum Fitting
+**1. Fitting Experimental Raman Spectra**
 
-   - Neural Network Method (raman_fit_NN.py)
-     Uses a pre-trained neural network to predict nanoparticle size distribution and broadening parameters. Works faster.
+- **Neural Network (raman_fit_NN.py)**
+  Fast reconstruction of size distribution and impurity parameters.
 
-   - Metropolis Optimization (raman_fit_Metropolis.py)
-     Iteratively refines the size distribution to minimize mean squared deviation between experimental and simulated spectra. Works better for multi-peak size ditributions. Can import starting parameters from parameters.csv.
+- **Metropolis Optimization (raman_fit_Metropolis.py)**
+  Iterative fitting; better suited for multimodal size distributions.
+  Can initialize from parameters.csv.
 
-   Both methods:
-     - Validate input spectra
-     - Apply the combined physical model (confinement + impurity effects)
-     - Output a ZIP archive containing reconstructed spectra, histograms, and estimated parameters (C_imp, Gamma0)
+Both methods:
+- Validate input spectra
+- Apply the full physical Raman model
+- Output a ZIP archive with fitted spectrum, size histogram, and parameters
 
-2. Spectrum Calculation from diamond nanopowder parameters*
 
-   - Forward spectrum modeling (raman_calculate.py)
-     Generates Raman spectra from:
-       D      : Mean particle diameter (nm)
-       dD     : Size dispersion (log-normal distribution assumed)
-       Cimp   : Impurity concentration
-       Gamma0 : Intrinsic linewidth
----------
-  * At their own risk, the User can change the dispersion paramters A,B in the "raman_spectrum_single_size" function from raman_routines module.
-
+**2. Forward Spectrum Calculation (raman_calculate.py)**
+Generates Raman spectra from nanopowder parameters:
+- D (mean size), dD (dispersion), Cimp, Gamma0
+(Log-normal distribution assumed; dispersion constants A,B can be edited manually.)
 
 
 ------------------------------------------------------------------
@@ -84,56 +76,45 @@ Input Data Formats
 ------------------------------
 parameters.csv
 ------------------------------
-Is used by all of the package tools: NN fit, Metropolis fit, custom Raman spectrum calculation
+Used by **all tools**.
 
-      background    : Perform the NN-based procedure of background subtraction (1.0 for Yes and 0.0 for No). Actual for NN and Metropolis
-      D             : Mean particle diameter (nm). Actual for Metropolis and custom spectrum calculation
-      dD            : Size dispersion (log-normal distribution assumed). Actual for Metropolis and custom spectrum calculation
-      Cimp          : Impurity concentration. Actual for Metropolis and custom spectrum calculation
-      Gamma0        : Intrinsic linewidth. Actual for Metropolis and custom spectrum calculation
-      adjust_Cimp   : Adjust impurity concentration during Metropolis fitting (1.0 for Yes and 0.0 for No). Actual for Metropolis
-      adjust_Gamma0 : Adjust broadening Gamma0 during Metropolis fitting (1.0 for Yes and 0.0 for No). Actual for Metropolis
+Fields:
+  background    : 1/0 — apply/pass NN-based background subtraction
+  D, dD         : Mean particle diameter, size dispersion
+  Cimp          : Impurity concentration
+  Gamma0        : Intrinsic linewidth
+  adjust_Cimp   : 1/0 — allow/prevent Metropolis to vary Cimp
+  adjust_Gamma0 : 1/0 — allow/prevent Metropolis to vary Gamma0
 
-For Metropolis, D, dD, Cimp, and Gamma0 give the initial state.
+Constraints:
+  1.5 ≤ D ≤ 9.0
+  0.05 ≤ dD ≤ 1.0
+  0 ≤ Cimp ≤ 5
+  0.5 ≤ Gamma0 ≤ 35
 
-      Constraints:
-      background = 1.0 or 0.0
-      1.5 <= D <= 9.0
-      0.05 <= dD <= 1.0
-      0.0 <= Cimp <= 5.0
-      0.5 <= Gamma0 <= 15.0
-      adjust_Cimp = 1.0 or 0.0
-      adjust_Gamma0 = 1.0 or 0.0
-
-Example content of parameters.csv:
-
+Example:
 background,D,dD,Cimp,Gamma0,adjust_Cimp,adjust_Gamma0
-0.0, 4.0, 0.1, 0.0, 14.5, 1.0, 1.0
+1.0,4.0,0.1,0.0,14.5,1.0,1.0
 
 
 ------------------------------
 input.csv
 ------------------------------
-Used by Neural Network and Metropolis spectrum fitting
-  input.csv with two columns (no header):
-    Wavenumber (cm^-1), Intensity
+Required for **NN** and **Metropolis** fitting.
 
-  Requirements:
-    - Wavenumber range fully includes 1300–1340 cm^-1 range. At least 40 points in this interval.
-    - Wavenumber values should be evenly destributed (no too small and too large intervals).
-    - Wavenumber values strictly increasing.
-    - Intensities are normalized automatically.
+Two-column file *(no header)*:
+  Wavenumber (cm⁻¹), Intensity
 
-    Example:
+Requirements:
+- Must fully include 1300–1340 cm⁻¹ with ≥40 points
+- Strictly increasing, nearly uniform grid
+- Intensities normalized internally
+
+Example:
 1299.5,0.111
 1300.0,0.123
-1300.5,0.134
-...
-1340.0,0.115
+…
 1340.5,0.0
-
-
-Examples of input.csv and parameter.csv files are presented in the Repository.
 
 
 ------------------------------------------------------------------
@@ -141,63 +122,75 @@ USAGE
 ------------------------------------------------------------------
 
 ### 1. Neural Network Fitting
-1. Copy your experimental spectrum to the same directory where raman_fit_NN.py is saved and obligatory rename it as input.csv.
-2. Adjust background subtraction parameter in parameters.csv (or use as it is)
+1. Place input spectrum as **input.csv** next to raman_fit_NN.py
+2. Adjust **parameters.csv** if needed
 3. Run:
-   python raman_fit_NN.py
-   ("run.sh -N" automatically finds pyton interpreter in a given folder)
-3. The script will produce:
-     * * * result_Raman_Fit_NN.zip * * *   containing:
-     - NN_spectra.csv – Experimental vs fitted spectrum
-     - NN_histogram.csv – Reconstructed particle size distribution
-     - NN_spectra.png – Plot of spectrum match
-     - NN_histogram.png – Plot of size distribution
+   `python raman_fit_NN.py`
+   or `run.sh -N`
+4. Output: **result_Raman_Fit_NN.zip**
 
-### 2. Metropolis fitting:
-1. Copy your experimental spectrum to the same directory where raman_fit_Metropolis.py is saved and obligatory rename it as input.csv.
-2. Adjust required parameters in parameters.csv (or use as it is)
+### 2. Metropolis Fitting
+1. Place input spectrum as **input.csv** next to raman_fit_Metropolis.py
+2. Edit **parameters.csv** for initial values and toggles
 3. Run:
-   python raman_fit_Metropolis.py
-   ("run.sh -M" automatically finds pyton interpreter in a given folder)
-4. The script will produce:   - result_Raman_Fit_Metropolis.zip -   with the same content as for Neural Network.
+   `python raman_fit_Metropolis.py`
+   or `run.sh -M`
+4. Output: **result_Raman_Fit_Metropolis.zip**
 
-### 3. Forward calculation:
-1. Tune the diamond nanopowder paratmertes in the parameters.csv file of the following format:
+### 3. Forward Spectrum Calculation
+1. Set D, dD, Cimp, Gamma0 in **parameters.csv**
 2. Run:
-   python raman_calculate.py
-3. The script will produce   - result_Raman_Calculated.zip containing -
+   `python raman_calculate.py`
+   or `run.sh`
+3. Output: **result_Raman_Calculated.zip**
 
 
 ------------------------------------------------------------------
 Output ZIP Contents
 ------------------------------------------------------------------
 
-Each ZIP archive includes:
-  *_spectra.csv   - Experimental vs. reconstructed/calculated spectra
-  *_spectra.png   - Plot of spectra comparison
-  *_hist.csv      - Predicted or input size distribution
-  *_hist.png      - Histogram of particle sizes
+Each ZIP contains:
+  *_spectra.csv   — Experimental vs reconstructed/calculated spectrum
+  *_spectra.png   — Spectrum comparison
+  *_hist.csv      — Size distribution (fitted or user-defined)
+  *_hist.png      — Histogram plot
+
 
 ------------------------------------------------------------------
 Dependencies
 ------------------------------------------------------------------
-- Python >= 3.9
+- Python ≥ 3.9
 - numpy
 - matplotlib
 
-Install with:
-  pip install numpy matplotlib
+Install:
+`pip install numpy matplotlib`
+
 
 ------------------------------------------------------------------
 Repository Structure
 ------------------------------------------------------------------
-raman_routines.py         - Core spectrum modeling, fitting, and validation functions
-raman_fit_NN.py           - Neural Network-based fitting
-raman_fit_Metropolis.py   - Metropolis-based fitting
-raman_calculate.py        - Forward spectrum calculation
-model_weights_0.npz       - Pre-trained NN weights (required for NN fitting)
+
+EXECUTABLES:
+  raman_fit_NN.py
+  raman_fit_Metropolis.py
+  raman_calculate.py
+
+INPUT:
+  parameters.csv
+  input.csv
+
+SUPPORT FILES:
+  raman_routines.py
+  csv_param.py
+  NN_load.npz
+  NN_loadB.npz
+  run.sh
+
+README.txt
+
 
 ------------------------------------------------------------------
 License
 ------------------------------------------------------------------
-Released under the MIT License.
+MIT License

@@ -8,19 +8,52 @@ import zipfile
 import copy
 import csv
 
-#===================================================================
+
+#from site 31 OCT 2025 ===================================================================
 
 def find_load_npz_file_alt(endswith_argument = '_load.npz'):
 
     #cwd = os.getcwd()
     cwd = os.path.dirname(os.path.abspath(__file__))
-    
+
     for filename in os.listdir(cwd):
         if filename.endswith(endswith_argument):
-            return filename
+            return os.path.join(os.path.dirname(os.path.abspath(__file__)),filename)
 
 
 #===================================================================
+
+
+def estimate_normal_params(x, y):
+    """
+    Estimate mean and standard deviation from histogram data
+    
+    Parameters:
+    x: bin centers or bin edges
+    y: bin counts or frequencies
+    
+    Returns:
+    mean, std: estimated parameters
+    """
+    # If x represents bin edges, convert to bin centers
+    if len(x) == len(y) + 1:
+        x_centers = (x[:-1] + x[1:]) / 2
+    else:
+        x_centers = x
+    
+    # Normalize y to get probabilities
+    probabilities = y / np.sum(y)
+    
+    # Calculate mean
+    mean = np.average(x_centers, weights=probabilities)
+    
+    # Calculate standard deviation
+    variance = np.average((x_centers - mean)**2, weights=probabilities)
+    std = np.sqrt(variance)
+    
+    return mean, std
+
+
 
 #===================================================================
 def define_constans():
@@ -93,17 +126,7 @@ def generate_lognormal_counts(mu_nm=4.0, sigma_nm=0.3, N_total=1000, CONST = CON
     counts = pdf / pdf.sum() * N_total
     return sizes_nm, counts
 
-def generate_normal_counts(mu_nm=4.0, sigma_nm=0.3, N_total=1000, CONST=None):
-    sizes_nm = CONST["BINS"]
-    mu = mu_nm
-    sigma = sigma_nm
-    
-    # Normal distribution PDF
-    pdf = (1 / (sigma * np.sqrt(2 * np.pi))) * \
-          np.exp(- (sizes_nm - mu) ** 2 / (2 * sigma ** 2))
-    
-    counts = pdf / pdf.sum() * N_total
-    return sizes_nm, counts
+
 
 def total_raman_spectrum(distribution_counts, c_imp, Gamma0, n_max=5, CONST = CONST):
     sizes_nm = CONST["BINS"]
@@ -151,17 +174,21 @@ def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
 
 
     # --- Step 1: Initialize current distribution from natural ND parameters / take initial params ---
-    if PARAMS and isinstance(PARAMS, (list, tuple)) and len(PARAMS) == 6:
-        mu0, sigma0, C_IMP, GAMMA0, Adjust_C_IMP, Adjust_GAMMA0 = PARAMS
-    else:
-        C_IMP = 0.7
-        GAMMA0 = 15.0
-        #mu0 = np.random.uniform(2.0, 7.0)
-        #sigma0 = np.random.uniform(0.2, 0.6)
-        mu0 = 5
-        sigma0 = 0.3
-        Adjust_C_IMP = 1.0
-        Adjust_GAMMA0 = 1.0
+    C_IMP = 0.0
+    GAMMA0 = 15.0
+    #mu0 = np.random.uniform(2.0, 7.0)
+    #sigma0 = np.random.uniform(0.2, 0.6)
+    mu0 = 4.0
+    sigma0 = 0.3
+    Adjust_C_IMP = 1.0
+    Adjust_GAMMA0 = 1.0
+    TEMP0 = 0.000001
+    if PARAMS and isinstance(PARAMS, (list, tuple)):
+        if len(PARAMS) == 6:
+            mu0, sigma0, C_IMP, GAMMA0, Adjust_C_IMP, Adjust_GAMMA0 = PARAMS
+        elif len(PARAMS) == 7:
+            mu0, sigma0, C_IMP, GAMMA0, Adjust_C_IMP, Adjust_GAMMA0, TEMP0 = PARAMS
+
 
     _, current_counts = generate_lognormal_counts(mu_nm=mu0, sigma_nm=sigma0, N_total=1000, CONST = CONST)
     current_counts /= np.max(current_counts)
@@ -187,7 +214,7 @@ def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
         trial_counts = np.clip(trial_counts,
                                 a_min = 0.0, a_max = 40.0);
         trial_counts /= np.max(trial_counts)  # keep normalized
-        
+
         C_IMP_trial = np.clip(C_IMP + Adjust_C_IMP * np.random.uniform(-0.01,0.01),
                                 a_min = 0.0, a_max = 3.0);
         GAMMA0_trial = np.clip(GAMMA0 + Adjust_GAMMA0* np.random.uniform(-0.05,0.05),
@@ -196,11 +223,10 @@ def metropolis(known_spectrum, CONST = CONST, PARAMS = False):
         trial_spectrum = total_raman_spectrum(trial_counts, C_IMP_trial, GAMMA0_trial,
         CONST=CONST)
         trial_msd = mean_squared_deviation(trial_spectrum, known_spectrum[:,1])
-
         delta_msd = trial_msd - current_msd
-        rr = np.random.uniform();  #or np.exp(delta_msd/0.01) > rr
-        #if np.exp(-delta_msd/0.00001) > rr: uncomment for full Metropolis
-        if delta_msd < 0:   # comment for full Metropolis
+        rr = np.random.uniform()
+        if np.exp(-delta_msd/TEMP0) > rr: ##uncomment for full Metropolis
+        #if delta_msd < 0:   # comment for full Metropolis
             current_counts = trial_counts
             current_spectrum = trial_spectrum
             C_IMP = C_IMP_trial
@@ -257,8 +283,11 @@ def create_output_zip(original_csv_path, zip_path, result_main, mode = "NN", CON
     volume_distribution = reconstructed_distribution[:,1]*CONST["NORMALIZE"]
     volume_distribution = volume_distribution/np.max(volume_distribution)
 
-    mean_D = np.sum(reconstructed_distribution[:,0] * reconstructed_distribution[:,1])/np.sum(reconstructed_distribution[:,1])
-    mean_SCA = np.sum(reconstructed_distribution[:,0]**4 * reconstructed_distribution[:,1])/np.sum(reconstructed_distribution[:,0]**3 * reconstructed_distribution[:,1])
+    #mean_D = np.sum(reconstructed_distribution[:,0] * reconstructed_distribution[:,1])/np.sum(reconstructed_distribution[:,1])
+    #mean_SCA = np.sum(reconstructed_distribution[:,0]**4 * reconstructed_distribution[:,1])/np.sum(reconstructed_distribution[:,0]**3 * reconstructed_distribution[:,1])
+
+    mean_N, sigma_N = estimate_normal_params(reconstructed_distribution[:,0], reconstructed_distribution[:,1])
+    mean_SCA, sigma_SCA = estimate_normal_params(reconstructed_distribution[:,0], reconstructed_distribution[:,1]*(reconstructed_distribution[:,0]**3))
 
     base_dir = os.path.dirname(original_csv_path)
     original_csv_name = os.path.basename(original_csv_path)
@@ -270,9 +299,14 @@ def create_output_zip(original_csv_path, zip_path, result_main, mode = "NN", CON
     hist_plot_path = os.path.join(base_dir, mode+"_histogram.png")
 
     # Save processed CSV
-    exp_ram = np.column_stack((known_spectrum[:,0], known_spectrum[:,1],reconstructed_spectrum[:,1]))
-    np.savetxt(spectra_csv_path, exp_ram, delimiter=",", fmt="%.6f", header='Energy, original, reconstructed')
-    
+
+    if known_spectrum.shape[1] == 3:
+        exp_ram = np.column_stack((known_spectrum[:,0], known_spectrum[:,1], known_spectrum[:,2], reconstructed_spectrum[:,1]))
+        np.savetxt(spectra_csv_path, exp_ram, delimiter=",", fmt="%.6f", header='Energy, Treated, Original, Reconstructed')
+    else:
+        exp_ram = np.column_stack((known_spectrum[:,0], known_spectrum[:,1],reconstructed_spectrum[:,1]))
+        np.savetxt(spectra_csv_path, exp_ram, delimiter=",", fmt="%.6f", header='Energy, Treated, Reconstructed')
+
     #exp_hist = np.column_stack((reconstructed_distribution))
     exp_hist = np.column_stack((reconstructed_distribution[:,0],reconstructed_distribution[:,1],volume_distribution))
     np.savetxt(hist_csv_path, exp_hist, delimiter=",", fmt="%.6f", header='Size_nm, By_N, By_Vol')
@@ -286,7 +320,7 @@ def create_output_zip(original_csv_path, zip_path, result_main, mode = "NN", CON
     plt.plot(known_spectrum[:,0], reconstructed_spectrum[:,1], label='Reconstructed spectrum', linestyle='--',color = 'blue')
 
     if known_spectrum.shape[1] == 3:
-        plt.plot(known_spectrum[:,0], known_spectrum[:,2], label='With background', color='green', linestyle='dotted')
+        plt.plot(known_spectrum[:,0], known_spectrum[:,2], label='With background (original)', color='green', linestyle='dotted')
 
     plt.xlabel('ω (cm⁻¹)')
     plt.ylabel('I(ω)')
@@ -304,23 +338,13 @@ def create_output_zip(original_csv_path, zip_path, result_main, mode = "NN", CON
     plt.xlabel('Particle size (nm)')
     plt.ylabel('Normalized counts')
     plt.title(f"Size distribution: $C_{{\\mathrm{{imp}}}} = {C_IMP:.2f}$%  $\Gamma_0 = {GAMMA0:.2f}~\\mathrm{{cm}}^{{-1}}$")
-    plt.text(0.0,-0.13,f"$\\langle D \\rangle_{{N}} = ${mean_D:.2f}nm  $\\langle D \\rangle_{{V}} = ${mean_SCA:.2f}nm")
+    plt.text(0.0,-0.13,f"$D_N = ${mean_N:.2f}nm  $D_V = ${mean_SCA:.2f}nm  $\\Delta D_V = ${sigma_SCA:.2f}nm")
 
     plt.legend()
     plt.savefig(hist_plot_path)
     plt.close()
 
     #==========================================================================
-    '''# Save plot
-    plt.figure()
-    plt.plot(processed_array[:, 0], processed_array[:, 1])
-    plt.xlabel("X")
-    plt.ylabel("Processed Y")
-    plt.title("Processed Data Plot")
-    plt.grid(True)
-    plt.tight_layout()
-    plt.savefig(plot_path)
-    plt.close()'''
 
     # Create ZIP archive
     with zipfile.ZipFile(zip_path, 'w') as zipf:
@@ -342,321 +366,10 @@ def create_output_zip(original_csv_path, zip_path, result_main, mode = "NN", CON
 
 
 
-#=====================================================================
 
-#   S A M P L E
 
 
 
-#			 SSSSS
-#			S     S
-#			S
-#			 SSSS
-#			     S
-#			S     S
-#			 SSSS
-
-
-
-
-#=====================================================================
-
-
-def generate_sample(npts = 140, CONST = CONST, n_distributions=3, noiselevel = 0.1, PARAMS = False):
-    # --- Step 1: Generate true (unknown) distribution and its spectrum ---
-
-    true_counts = np.zeros(CONST["N_BINS"])
-
-    # Combine several random log-normal distributions
-
-    if PARAMS == False:
-        for _ in range(n_distributions):
-            mu = np.random.uniform(2.0, 6.0)
-            #sigma = np.random.uniform(0.2 - 0.12, 0.6 - 0.3)
-            sigma = np.random.uniform(0.05, 0.3*6/mu)
-            _, counts = generate_lognormal_counts(mu_nm=mu,
-            sigma_nm=sigma, N_total=np.random.uniform(300, 800), CONST = CONST)
-            true_counts += counts
-        C_IMP = np.random.uniform(0.0,2.7)
-        GAMMA0 = 0.5* 2.0 ** np.random.uniform(0,5.0)
-    else:
-        mu = PARAMS[0]
-        sigma = mu = PARAMS[1]
-        _, counts = generate_lognormal_counts(mu_nm=mu,
-        sigma_nm=sigma, N_total=np.random.uniform(300, 800), CONST = CONST)
-        true_counts += counts
-        C_IMP = PARAMS[2]
-        GAMMA0 = PARAMS[3]
-
-    true_counts /= np.max(true_counts)  # Normalize
-
-    omega_axis_prim = np.linspace(1280, 1360, npts)
-    CONST_prim = copy.deepcopy(CONST)
-    CONST_prim["OMEGA_AXIS"] = omega_axis_prim
-    known_spectrum_prim = total_raman_spectrum(true_counts, C_IMP, GAMMA0, CONST=CONST_prim)
-
-    noise_1 = np.random.uniform(-noiselevel, noiselevel, size=omega_axis_prim.shape)
-    noise_2 = np.random.uniform(-noiselevel, noiselevel, size=omega_axis_prim.shape)
-
-    omega_axis_prim = omega_axis_prim + noise_1
-    known_spectrum_prim = known_spectrum_prim + noise_1
-    known_spectrum_prim = known_spectrum_prim * 2.0**np.random.uniform(-4,8)
-    # Merge into Nx2 array
-    merged_array = np.column_stack((omega_axis_prim, known_spectrum_prim))  # Alternatively np.vstack((X_noisy, Y_noisy)).T
-
-    # Save as CSV
-    #np.savetxt("noisy_data.csv", merged_array, delimiter=",", header="X,Y", comments="", fmt="%.6f")
-    np.savetxt("noisy_data.csv", merged_array, delimiter=",", comments="", fmt="%.6f")
-
-
-    # Plot spectrum match
-    plt.figure(figsize=(7, 4))
-    plt.plot(merged_array[:,0], merged_array[:,1], label='Known spectrum', linewidth=2)
-    plt.xlabel('ω (cm⁻¹)')
-    plt.ylabel('I(ω)')
-    plt.title('Spectrum reconstruction')
-    plt.legend()
-    plt.show()
-
-
-
-
-    return true_counts, C_IMP, GAMMA0
-
-
-#==========================================================================================
-
-
-
-#==========================================================================================
-
-#  T R A I N
-
-#==========================================================================================
-
-
-
-#==========================================================================================
-
-
-
-
-def proportional_one_hot(value, length):
-    # Clamp the value to the valid range [0, length-1]
-    value = np.clip(value, 0, length - 1)
-    
-    # Find the floor and ceiling indices
-    lower_idx = int(np.floor(value))
-    upper_idx = int(np.ceil(value))
-    
-    # If value is exactly an integer, use standard one-hot
-    if lower_idx == upper_idx:
-        arr = np.zeros(length)
-        arr[lower_idx] = 1.0
-        return arr
-    
-    # Calculate weights based on proximity
-    lower_weight = upper_idx - value  # closer to upper = less weight for lower
-    upper_weight = value - lower_idx  # closer to lower = less weight for upper
-    
-    arr = np.zeros(length)
-    arr[lower_idx] = lower_weight
-    arr[upper_idx] = upper_weight
-    
-    return arr
-
-
-
-def one_hot(index, length, proportional = True):
-    if proportional:
-        return proportional_one_hot(index, length)
-    else:
-        #arr = np.zeros(length)
-        #arr[index] = 1.0
-        #return arr
-        arr = np.zeros(length)
-        arr[np.rint(index).astype(int)] = 1.0
-        return arr
-        
-
-def generate_sample_train(CONST, n_distributions=1, noiselevel = 0.01, proportional = True):
-
-    # Generate composite size distribution
-    total_counts = np.zeros(CONST["N_BINS"])
-
-    if n_distributions == 2 :
-         n_distributions_prim = np.random.choice(2, 1, p=[0.75,0.25])[0]+1
-    elif n_distributions == 3:
-        n_distributions_prim = np.random.choice(3, 1, p=[0.7,0.2,0.1])[0]+1
-    else:
-        n_distributions_prim = 1
-
-    for _ in range(n_distributions_prim):
-        #mu = 1.5*2.0**np.random.uniform(0.0,2.2)
-        mu = np.random.uniform(1.5, 7.0)
-        if np.random.uniform()>=0.32:
-            #sigma = np.random.uniform(0.05, 0.5)
-            sigma = np.random.uniform(0.15*(1.5/mu)**0.33, 0.4*(1.5/mu)**0.5)
-            _, counts = generate_lognormal_counts(mu_nm=mu, sigma_nm=sigma, N_total=1000, CONST=CONST)
-        else:
-            sigma = np.random.uniform(0.35 * (mu / 1.5)**0.5, 1.3)
-            _, counts = generate_normal_counts(mu_nm=mu, sigma_nm=sigma, N_total=1000, CONST=CONST)  #added Gaussian
-
-        pow_hist = np.random.uniform(0.9,1.2)  #added deformation of distribution!
-        counts2 = counts**pow_hist     #added deformation of distribution!
-        counts2 = counts2 / np.sum(counts2) * np.sum(counts)     #added deformation of distribution!
-        total_counts += counts2
-    
-
-    total_counts = total_counts/np.max(total_counts)
-    # Choose discrete c_imp and Gamma0
-    ###i_c = np.random.randint(0, CONST["N_Cimp"])
-    ###i_g = np.random.randint(0, CONST["N_Gamma0"])
-    i_c = np.random.uniform(0, CONST["N_Cimp"]-1)
-    i_g = np.random.uniform(0, CONST["N_Gamma0"]-1)
-    
-
-    c_imp = c_imp_vs_index(i_c)
-    Gamma0 = Gamma0_vs_index(i_g)
-
-    # Generate spectrum
-    spectrum = total_raman_spectrum(total_counts, c_imp, Gamma0, CONST=CONST)
-    spectrum = spectrum + np.random.uniform() * np.random.uniform(-noiselevel,noiselevel,size=spectrum.shape)
-    # Construct label vector Y
-    total_counts_normalized = total_counts * CONST["NORMALIZE"]
-    total_counts_normalized = total_counts_normalized/np.max(total_counts_normalized)
-    Y = np.concatenate([
-        total_counts_normalized,         # size distribution counts
-        one_hot(i_c, CONST["N_Cimp"], proportional = proportional),     # one-hot c_imp
-        one_hot(i_g, CONST["N_Gamma0"], proportional = proportional)       # one-hot Gamma0
-    ])
-
-    return spectrum, Y
-
-
-
-
-
-
-
-
-
-
-
-
-
-#=====================================================================
-
-#      C   S   V
-
-
-
-
-#			  CCCCC
-#			C     C
-#			C
-#			C
-#			C
-#			C     C
-#			  CCCCC
-
-
-
-#=====================================================================
-
-def subtract_background(known_spectrum_arg, filename_BACK):
-    known_spectrum = known_spectrum_arg.copy()
-    numpy_model_BACK = load_numpy_model(filename =  filename_BACK , activation='tanh')
-    known_spectrum_BACK = numpy_model_BACK(known_spectrum[:,1])
-    known_spectrum[:,1] = known_spectrum_BACK[:]
-    sigma = 2 * 0.67
-    radius = int(3 * sigma)
-    x = np.arange(-radius, radius + 1)
-    kernel = np.exp(-0.5 * (x / sigma) ** 2)
-    kernel = kernel / kernel.sum()
-    pad_width = radius
-    padded_data = np.pad(known_spectrum[:,1], pad_width, mode='edge')
-    known_spectrum[:,1] = np.convolve(padded_data, kernel, mode='valid')
-    #known_spectrum[:,1] = np.convolve(known_spectrum[:,1], kernel, mode='same')
-    known_spectrum[:,1] = known_spectrum[:,1] / np.max(known_spectrum[:,1])
-    return np.column_stack((known_spectrum[:,0], known_spectrum[:,1],known_spectrum_arg[:,1]))
-
-#=====================================================================
-
-
-
-def check_csv_format(filename, CONST = CONST, SUBTRACT_BACKGROUND = False):
-    try:
-        data = np.loadtxt(filename, delimiter=",")
-    except Exception as e:
-        return False, f"Failed to read CSV as numeric data: {e}", None
-
-    # Check shape
-    if data.ndim != 2 or data.shape[1] != 2:
-        return False, "CSV must have exactly two columns", None
-
-    X, Y = data[:, 0], data[:, 1]
-
-    # Check positivity
-    #if not np.all(X > 0) or not np.all(Y > 0):
-    if not np.all(X > 0):
-        return False, "All X values must be positive", None
-
-    # Check monotonic increase
-    if not np.all(np.diff(X) > 0):
-        return False, "X must be strictly increasing", None
-
-    # Find s and f indices
-    s_candidates = np.where((X[:-1] < 1300) & (X[1:] > 1300))[0]
-    f_candidates = np.where((X[:-1] < 1340) & (X[1:] > 1340))[0]
-    if len(s_candidates) == 0 or len(f_candidates) == 0:
-        return False, "Cannot find interpolation bounds for 1300 and 1350", None
-
-    s = s_candidates[0]
-    f = f_candidates[0]
-
-    if f <= s:
-        return False, "f must be greater than s", None
-
-    sub_X = X[s:f+2]
-    sub_Y = Y[s:f+2]
-
-    if len(sub_X) < 40:
-        return False, f"Subarray has only {len(sub_X)} points, at least 40 required", None
-
-    # Check uniformity
-    deltas = np.diff(sub_X)
-    mean_delta = np.mean(deltas)
-    if not np.all((deltas > 0.01 * mean_delta) & (deltas < 10 * mean_delta)):
-        return False, "Non-uniform spacing in X subarray", None
-
-    # Target X values for interpolation
-    #interp_X = np.arange(1300, 1340.1, 0.5)
-    interp_X = CONST["OMEGA_AXIS"]
-    # Homemade linear interpolation
-    interp_Y = np.empty_like(interp_X)
-    j = 0
-    for i, xi in enumerate(interp_X):
-        # Move j to correct interval
-        while j < len(sub_X) - 2 and sub_X[j+1] < xi:
-            j += 1
-        x0, x1 = sub_X[j], sub_X[j+1]
-        y0, y1 = sub_Y[j], sub_Y[j+1]
-        # Linear interpolation formula
-        t = (xi - x0) / (x1 - x0)
-        interp_Y[i] = (1 - t) * y0 + t * y1
-    interp_Y = interp_Y / np.max(interp_Y)
-    interpolated_data = np.column_stack((interp_X, interp_Y))
-
-
-    if SUBTRACT_BACKGROUND:
-        filename_BACK = find_load_npz_file_alt(endswith_argument = "loadB.npz")
-        if filename_BACK != None:
-            interpolated_data = subtract_background(interpolated_data,filename_BACK)
-
-
-
-    return True, "Success", interpolated_data
 
 
 
@@ -735,7 +448,7 @@ def create_output_zip_derive(zip_path, input1, CONST = CONST, Cleanup = True):
     plt.figure(figsize=(7, 4))
     #plt.bar(sizes_nm - 0.1, true_counts, width=0.2, label='True distribution')
     #plt.bar(sizes_nm + 0.1, reconstructed_distribution, width=0.2, label='Reconstructed distribution')
-    plt.bar(exp_hist[:,0], exp_hist[:,1], width=0.29, label='Reconstructed distribution')
+    plt.bar(exp_hist[:,0], exp_hist[:,1], width=0.29, label='Derived distribution')
     plt.xlabel('Particle size (nm)')
     plt.ylabel('Normalized counts')
     plt.title(f"Size distribution: $C_{{\\mathrm{{imp}}}} = {P3:.2f}$%  $\Gamma_0 = {P4:.2f}~\\mathrm{{cm}}^{{-1}}$")
@@ -830,7 +543,7 @@ def weighted_round_index(arr, pow1 = 1.0):
 
 def NNapproach(known_spectrum, CONST = CONST, PARAMS = False):
     spectrum_to_treat = known_spectrum[:,1]
-    spectrum_to_treat = spectrum_to_treat + np.random.uniform(low=-0.005*0, high=0.005*3, size=spectrum_to_treat.shape)
+    spectrum_to_treat = spectrum_to_treat + np.random.uniform(low=-0.005*0, high=0.004, size=spectrum_to_treat.shape)
     spectrum_to_treat = spectrum_to_treat/np.max(spectrum_to_treat)
 
     base_dir_NN = os.path.dirname(os.path.abspath(__file__))
@@ -848,7 +561,7 @@ def NNapproach(known_spectrum, CONST = CONST, PARAMS = False):
     bins_return = bins_return / CONST["NORMALIZE"]
     bins_return = bins_return/np.max(bins_return)
     #------------------------
-    
+
 
     cimp_arr_tmp = Y_pred[CONST["N_BINS"]:CONST["N_BINS"] + CONST["N_Cimp"]]
     gamma_arr_tmp = Y_pred[-CONST["N_Gamma0"]:]
@@ -891,5 +604,226 @@ def NNapproach(known_spectrum, CONST = CONST, PARAMS = False):
 
 
 
+#=============================================================================================================================================
 
+
+
+
+
+
+
+
+
+
+#==============================================================================================================================================
+
+#      C   S   V
+
+
+
+
+#			  CCCCC
+#			C     C
+#			C
+#			C
+#			C
+#			C     C
+#			  CCCCC
+
+
+
+#=====================================================================
+
+def subtract_background(known_spectrum_arg, filename_BACK):
+    known_spectrum = known_spectrum_arg.copy()
+    numpy_model_BACK = load_numpy_model(filename =  filename_BACK , activation='tanh')
+    known_spectrum_BACK = numpy_model_BACK(known_spectrum[:,1])
+    known_spectrum[:,1] = known_spectrum_BACK[:]
+    sigma = 2 * 0.67
+    radius = int(3 * sigma)
+    x = np.arange(-radius, radius + 1)
+    kernel = np.exp(-0.5 * (x / sigma) ** 2)
+    kernel = kernel / kernel.sum()
+    pad_width = radius
+    padded_data = np.pad(known_spectrum[:,1], pad_width, mode='edge')
+    known_spectrum[:,1] = np.convolve(padded_data, kernel, mode='valid')
+    #known_spectrum[:,1] = np.convolve(known_spectrum[:,1], kernel, mode='same')
+    known_spectrum[:,1] = known_spectrum[:,1] / np.max(known_spectrum[:,1])
+    return np.column_stack((known_spectrum[:,0], known_spectrum[:,1],known_spectrum_arg[:,1]))
+
+#=====================================================================
+
+
+
+
+
+
+
+def check_csv_format(filename, CONST=None, SUBTRACT_BACKGROUND=False):
+    if CONST is None:
+        CONST = {"OMEGA_AXIS": np.arange(1300, 1340.1, 0.5)}
+
+    try:
+        # First, try to detect the format by reading the first few lines
+        with open(filename, 'r', encoding='utf-8') as file:
+            lines = [file.readline().strip() for _ in range(5)]
+
+        # Detect delimiter
+        delimiter = detect_delimiter(lines[0])
+
+        # Detect decimal separator and check for header
+        has_header, decimal_separator = detect_header_and_decimal(lines, delimiter)
+
+        # Load data, skipping header if present
+        skiprows = 1 if has_header else 0
+
+        if decimal_separator == ',':
+            # For comma decimal, we need to convert commas to dots
+            data = load_csv_with_comma_decimal(filename, delimiter, skiprows)
+        else:
+            # Standard load with detected delimiter
+            data = np.loadtxt(filename, delimiter=delimiter, skiprows=skiprows)
+
+    except Exception as e:
+        return False, f"Failed to read CSV file: {e}", None
+
+    # Check shape
+    if data.ndim != 2 or data.shape[1] != 2:
+        return False, f"CSV must have exactly two columns, found {data.shape[1] if data.ndim == 2 else 'invalid'}", None
+
+    X, Y = data[:, 0], data[:, 1]
+
+    # Check positivity
+    if not np.all(X > 0):
+        return False, "All X values must be positive", None
+
+    # Check monotonic increase
+    if not np.all(np.diff(X) > 0):
+        return False, "X must be strictly increasing", None
+
+    # Find s and f indices
+    s_candidates = np.where((X[:-1] <= 1300) & (X[1:] > 1300))[0]
+    f_candidates = np.where((X[:-1] < 1340) & (X[1:] >= 1340))[0]
+    if len(s_candidates) == 0 or len(f_candidates) == 0:
+        return False, "Cannot find interpolation bounds for 1300 and 1340", None
+
+    s = s_candidates[0]
+    f = f_candidates[0]
+
+    if f <= s:
+        return False, "f must be greater than s", None
+
+    sub_X = X[s:f+2]
+    sub_Y = Y[s:f+2]
+
+    if len(sub_X) < 20:
+        return False, f"Subarray has only {len(sub_X)} points, at least 20 required", None
+
+    # Check uniformity
+    deltas = np.diff(sub_X)
+    mean_delta = np.mean(deltas)
+    if not np.all((deltas > 0.01 * mean_delta) & (deltas < 10 * mean_delta)):
+        return False, "Non-uniform spacing in X subarray", None
+
+    # Target X values for interpolation
+    interp_X = CONST["OMEGA_AXIS"]
+    # Homemade linear interpolation
+    interp_Y = np.empty_like(interp_X)
+    j = 0
+    for i, xi in enumerate(interp_X):
+        # Move j to correct interval
+        while j < len(sub_X) - 2 and sub_X[j+1] < xi:
+            j += 1
+        x0, x1 = sub_X[j], sub_X[j+1]
+        y0, y1 = sub_Y[j], sub_Y[j+1]
+        # Linear interpolation formula
+        t = (xi - x0) / (x1 - x0)
+        interp_Y[i] = (1 - t) * y0 + t * y1
+    interp_Y = interp_Y / np.max(interp_Y)
+    interpolated_data = np.column_stack((interp_X, interp_Y))
+
+    if SUBTRACT_BACKGROUND:
+        filename_BACK = find_load_npz_file_alt(endswith_argument="loadB.npz")
+        if filename_BACK is not None:
+            interpolated_data = subtract_background(interpolated_data, filename_BACK)
+
+    return True, "Success", interpolated_data
+
+
+def detect_delimiter(first_line):
+    """Detect the delimiter used in the CSV file"""
+    # Common delimiters to check
+    delimiters = [',', '\t', ';', ' ', '|']
+
+    # Count occurrences of each delimiter
+    counts = {delim: first_line.count(delim) for delim in delimiters}
+
+    # Return the delimiter with the highest count
+    best_delimiter = max(counts, key=counts.get)
+
+    # If no delimiter found or space is the best but there are few spaces,
+    # default to comma
+    if counts[best_delimiter] == 0 or (best_delimiter == ' ' and counts[' '] < 2):
+        return ','
+
+    return best_delimiter
+
+
+def detect_header_and_decimal(lines, delimiter):
+    """Detect if the file has a header and what decimal separator is used"""
+    has_header = False
+    decimal_separator = '.'
+
+    if not lines or not lines[0]:
+        return has_header, decimal_separator
+
+    # Check if first line might be a header (contains non-numeric values)
+    first_line_parts = lines[0].split(delimiter)
+    try:
+        # Try to convert first two elements to float
+        float(first_line_parts[0].strip())
+        float(first_line_parts[1].strip())
+        # If successful, likely no header
+        has_header = False
+    except (ValueError, IndexError):
+        # If conversion fails, likely has header
+        has_header = True
+
+    # Detect decimal separator by checking numeric lines
+    check_lines = lines[1:] if has_header else lines
+
+    for line in check_lines:
+        if not line:
+            continue
+
+        parts = line.split(delimiter)
+        if len(parts) >= 2:
+            # Check for comma as decimal separator
+            for part in parts[:2]:  # Check first two columns
+                part = part.strip()
+                if ',' in part and '.' not in part:
+                    # Count commas - if exactly one and not at the end, likely decimal
+                    if part.count(',') == 1 and not part.endswith(','):
+                        try:
+                            # Try replacing comma with dot and converting
+                            float(part.replace(',', '.'))
+                            decimal_separator = ','
+                            return has_header, decimal_separator
+                        except ValueError:
+                            pass
+                elif '.' in part:
+                    decimal_separator = '.'
+
+    return has_header, decimal_separator
+
+
+def load_csv_with_comma_decimal(filename, delimiter, skiprows):
+    """Load CSV file with comma as decimal separator"""
+    def convert_comma_decimal(x):
+        if isinstance(x, bytes):
+            x = x.decode('utf-8')
+        return float(x.replace(',', '.'))
+
+    converters = {0: convert_comma_decimal, 1: convert_comma_decimal}
+    return np.loadtxt(filename, delimiter=delimiter, skiprows=skiprows, converters=converters)
 
