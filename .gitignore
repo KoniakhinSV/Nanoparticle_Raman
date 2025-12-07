@@ -62,14 +62,13 @@ coverage.xml
 *.swo
 
 # Custom files (add your specific files here)
-model_weights_here.npz
-raman_dataset_X.npy
-raman_dataset_Y.npy
-raman_net_best_X2.pth
 
 result_Raman_Calculated.zip
 result_Raman_Fit_Metropolis.zip
 result_Raman_Fit_NN.zip
+
+RAMAN_TOOL.zip
+run.sh
 
 # Custom directories (add your specific directories here)
 _misc/

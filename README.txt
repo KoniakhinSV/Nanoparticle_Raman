@@ -2,9 +2,15 @@
 Raman Spectra Analysis and Simulation Tool for Nanodiamonds
 ============================================================
 
-------------------------------------------------------------------
-General Overview
-------------------------------------------------------------------
+
+
+==================================================================
+QUICK START
+==================================================================
+
+Available both as a script repository and an online tool:
+1. https://github.com/KoniakhinSV/Nanoparticle_Raman
+2. https://nanoraman.pythonanywhere.com
 
 This toolkit provides Python-based methods for:
 
@@ -18,16 +24,44 @@ Two fitting approaches are available:
 Simulation is performed by:
    • raman_calculate.py
 
-Available both as a script repository and an online tool:
-1. https://github.com/KoniakhinSV/Nanoparticle_Raman
-2. https://nanoraman.pythonanywhere.com
+Theory: https://arxiv.org/abs/2511.23053
 
+
+------------------------------------------------------------------
+Usage
+------------------------------------------------------------------
+
+### 1. Neural Network Fitting
+1. Place input spectrum as **input.csv** next to raman_fit_NN.py
+2. Adjust **parameters.csv** if needed
+3. Run:
+   `python raman_fit_NN.py`
+4. Output: **result_Raman_Fit_NN.zip**
+
+### 2. Metropolis Fitting
+1. Place input spectrum as **input.csv** next to raman_fit_Metropolis.py
+2. Edit **parameters.csv** for initial values and toggles
+3. Run:
+   `python raman_fit_Metropolis.py`
+4. Output: **result_Raman_Fit_Metropolis.zip**
+
+### 3. Forward Spectrum Calculation
+1. Set D, dD, Cimp, Gamma0 in **parameters.csv**
+2. Run:
+   `python raman_calculate.py`
+3. Output: **result_Raman_Calculated.zip**
+
+
+
+==================================================================
+DESCRIPTION
+==================================================================
 
 ------------------------------------------------------------------
 Physical Models Behind the Algorithms
 ------------------------------------------------------------------
 
-The implementation follows modern theories of Raman scattering in nanodiamonds:
+The implementation follows modern theories of Raman scattering in nanodiamonds. Accurate reconstruction requires both confinement and impurity effects:
 
 1. **Finite-size phonon confinement**
    Discrete quantized phonon modes cause peak downshift and asymmetric broadening
@@ -41,7 +75,9 @@ The implementation follows modern theories of Raman scattering in nanodiamonds:
    Vacancies/substitutional atoms introduce size-independent shifts and broadening
    (arXiv:2403.17310; https://doi.org/10.1016/j.diamond.2024.111182)
 
-Accurate reconstruction requires both confinement and impurity effects.
+4. **Raman Spectra Fitting procedure**
+Neural Network and Metropolis implementation
+(https://arxiv.org/abs/2511.23053)
 
 
 ------------------------------------------------------------------
@@ -118,34 +154,6 @@ Example:
 
 
 ------------------------------------------------------------------
-USAGE
-------------------------------------------------------------------
-
-### 1. Neural Network Fitting
-1. Place input spectrum as **input.csv** next to raman_fit_NN.py
-2. Adjust **parameters.csv** if needed
-3. Run:
-   `python raman_fit_NN.py`
-   or `run.sh -N`
-4. Output: **result_Raman_Fit_NN.zip**
-
-### 2. Metropolis Fitting
-1. Place input spectrum as **input.csv** next to raman_fit_Metropolis.py
-2. Edit **parameters.csv** for initial values and toggles
-3. Run:
-   `python raman_fit_Metropolis.py`
-   or `run.sh -M`
-4. Output: **result_Raman_Fit_Metropolis.zip**
-
-### 3. Forward Spectrum Calculation
-1. Set D, dD, Cimp, Gamma0 in **parameters.csv**
-2. Run:
-   `python raman_calculate.py`
-   or `run.sh`
-3. Output: **result_Raman_Calculated.zip**
-
-
-------------------------------------------------------------------
 Output ZIP Contents
 ------------------------------------------------------------------
 
@@ -182,10 +190,8 @@ INPUT:
 
 SUPPORT FILES:
   raman_routines.py
-  csv_param.py
   NN_load.npz
   NN_loadB.npz
-  run.sh
 
 README.txt
 

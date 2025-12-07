@@ -1,6 +1,5 @@
 import raman_routines
 import os
-from csv_param import validate_parameters
 
 # --- initialize ---
 os.environ["QT_QPA_PLATFORM"] = "offscreen"
@@ -13,7 +12,7 @@ zip_path = os.path.join(BASE_DIR, "result_Raman_Fit_NN.zip")
 
 
 #----------------------------------------------------------------------------------
-params, error = validate_parameters('parameters.csv')
+params, error = raman_routines.validate_parameters('parameters.csv')
 if error:
     SUBTRACT_BACKGROUND = False
     print(f"Parameters validation error: {error}")
